@@ -1,0 +1,81 @@
+{
+    "_metadata": {
+        "major_version": 1,
+        "minor_version": 1
+    },
+    "display_information": {
+        "name": "Yeasty the Squire",
+        "description": "Humble servant to Your Majesty, BreadMan the First of His Name, Conqueror of Crusts, and Protector of the Realm of Gluten.",
+        "background_color": "#f4e1ad"
+    },
+    
+    "features": {
+        "app_home": {
+            "home_tab_enabled": true,
+            "messages_tab_enabled": true,
+            "messages_tab_read_only_enabled": false
+        },
+        "bot_user": {
+            "display_name": "Yeasty the Squire",
+            "always_online": true
+        },
+        "slash_commands": [
+            {
+                "command": "/decree",
+                "description": "Issues a royal proclamation from the King",
+                "should_escape": false
+            },
+            {
+                "command": "/proof",
+                "description": "Posts a daily stand-up template for the team",
+                "should_escape": false
+            },
+            {
+                "command": "/bribe-squire",
+                "description": "Squire responds with random funny sayings",
+                "should_escape": false
+            },
+            {
+                "command": "/butter-up",
+                "description": "Award 1 Butter Point to a user (3 per day limit)",
+                "should_escape": false
+            },
+            {
+                "command": "/promote",
+                "description": "King only - Grant a custom title to a user",
+                "should_escape": false
+            },
+            {
+                "command": "/court-rankings",
+                "description": "Display the royal leaderboard of all Butter Points",
+                "should_escape": false
+            }
+        ]
+    },
+    "oauth_config": {
+        "scopes": {
+            "bot": [
+                "channels:history",
+                "channels:read",
+                "chat:write",
+                "commands",
+                "groups:history",
+                "im:history"
+            ]
+        }
+    },
+    "settings": {
+        "event_subscriptions": {
+            "bot_events": [
+                "app_home_opened",
+                "member_joined_channel",
+                "message.channels"
+            ]
+        },
+        "interactivity": {
+            "is_enabled": true
+        },
+        "org_deploy_enabled": true,
+        "socket_mode_enabled": true
+    }
+}
