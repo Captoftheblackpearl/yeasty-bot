@@ -163,7 +163,7 @@ app.command('/bribe-squire', async ({ command, ack, client }) => {
 //   - Max 3 butters per day per person (rate limiting using Firebase)
 //   - Atomic transactions ensure safe concurrent updates
 // Usage: /butter-up @username
-aapp.command('/butter-up', async ({ command, ack, client }) => {
+app.command('/butter-up', async ({ command, ack, client }) => {
   await ack(); // Acknowledge immediately (Squire is fast!)
 
   const giver = command.user_id;
