@@ -167,7 +167,30 @@ app.command('/butter-up', async ({ command, ack, client }) => {
   await ack(); // Acknowledge immediately (Squire is fast!)
 
   const giver = command.user_id;
+  app.command('/butter-up', async ({ command, ack, client }) => {
+  await ack();
 
+  const giver = command.user_id;
+  // This will show us EXACTLY what is coming from Slack
+  console.log('--- 🛡️ SQUIRE DIAGNOSTICS ---');
+  console.log('RAW TEXT RECEIVED:', JSON.stringify(command.text));
+  console.log('FULL COMMAND OBJECT:', JSON.stringify(command));
+  console.log('---------------------------');
+
+  // Try the most aggressive match possible
+  const receiverMatch = command.text.match(/([A-Z0-9]{9,11})/); 
+  const receiver = receiverMatch ? receiverMatch[0] : null;
+
+  if (!receiver) {
+    return await client.chat.postEphemeral({
+      channel: command.channel_id,
+      user: giver,
+      text: `❌ Squire Error: I saw "${command.text}" but couldn't find a User ID. Make sure you select a user from the menu!`
+    });
+  }
+
+});
+{/*}
   // 🔍 1. Refined Regex: Slack mentions look like <@U12345678|name> or just <@U12345678>
   const receiverMatch = command.text.match(/<@([A-Z0-9]+)(?:\|[^>]*)?>/);
   const receiver = receiverMatch ? receiverMatch[1] : null;
@@ -188,7 +211,7 @@ app.command('/butter-up', async ({ command, ack, client }) => {
       user: giver,
       text: '🛡️ You cannot butter yourself! That is not the way of the Squire.'
     });
-  }
+  }*/}
 
   // 📊 RATE LIMITING: Check if user has exceeded 3 butters per day (Firebase)
   const canAward = await checkButterLimit(giver);
