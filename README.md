@@ -28,6 +28,25 @@ Before you can run the app, you'll need to store some environment variables.
 2. Open your apps configuration page from [this list](https://api.slack.com/apps), click _OAuth & Permissions_ in the left hand menu, then copy the _Bot User OAuth Token_ into your `.env` file under `SLACK_BOT_TOKEN`
 3. Click _Basic Information_ from the left hand menu and follow the steps in the _App-Level Tokens_ section to create an app-level token with the `connections:write` scope. Copy that token into your `.env` as `SLACK_APP_TOKEN`.
 
+#### Firebase Configuration
+
+This app uses Firebase for data storage and analytics. To set it up:
+
+1. Go to [Firebase Console](https://console.firebase.google.com/) and create a new project
+2. Once created, click **Project Settings** (gear icon)
+3. Copy your Firebase configuration values
+4. Add them to your `.env` file:
+   - `FIREBASE_API_KEY` - Your API key
+   - `FIREBASE_AUTH_DOMAIN` - Your auth domain
+   - `FIREBASE_DATABASE_URL` - Your Realtime Database URL
+   - `FIREBASE_PROJECT_ID` - Your project ID
+   - `FIREBASE_STORAGE_BUCKET` - Your storage bucket
+   - `FIREBASE_MESSAGING_SENDER_ID` - Your messaging sender ID
+   - `FIREBASE_APP_ID` - Your app ID
+   - `FIREBASE_MEASUREMENT_ID` - Your measurement ID (optional)
+
+See [.env.sample](./.env.sample) for a template.
+
 ### Setup Your Local Project
 
 ```zsh

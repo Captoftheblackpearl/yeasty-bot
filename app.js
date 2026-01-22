@@ -1,45 +1,30 @@
 // ✨ OKAY SO THIS IS THE BREAD BOT ✨
 // Imports for literally everything we need to run this thing
 
-import fs from 'node:fs'; // File system stuff for reading/writing our database
+import http from 'node:http';
 import pkg from '@slack/bolt';
 import { config } from 'dotenv'; // Load env variables from .env file (super important!!!)
-import http from 'node:http';
+import { awardButterPoint, checkButterLimit, getLeaderboard, promoteUser } from './firebase-usage.js'; // Firebase Admin SDK functions!
 
-http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end('The Squire is awake!');
-}).listen(process.env.PORT || 10000);
+http
+  .createServer((_req, res) => {
+    res.writeHead(200);
+    res.end('The Squire is awake!');
+  })
+  .listen(process.env.PORT || 10000);
 
 const { App, LogLevel } = pkg; // Slack's main app thingy and logging
 
 config(); // LOAD THE .ENV FILE!!! This has all our secret tokens and stuff
 
 // ==========================================
-// DATABASE CONFIGURATION (THE VAULT!! 🏰)
+// DATABASE CONFIGURATION (FIREBASE ADMIN!! 🔥)
 // ==========================================
-// okay so we store literally EVERYTHING in royal_vault.json
-// - users: { userId: { points: number, title: string }, ... }
+// We store all data in Firebase Realtime Database
+// - users: { userId: { points: number, title: string, updatedAt: timestamp }, ... }
 // - logs: { userId: { date: YYYY-MM-DD, count: number }, ... }
-// this lets us keep track of Butter Points and make sure nobody spams the /butter-up command
-// it's like a little database but in JSON format lmaooo
-const DB_PATH = './royal_vault.json';
-
-// 🛠️ INITIALIZE THE VAULT IF IT DOESN'T EXIST
-// basically if this is the first time running, we create an empty vault
-// so the app doesn't crash trying to read a file that isn't there yet
-if (!fs.existsSync(DB_PATH)) {
-  fs.writeFileSync(DB_PATH, JSON.stringify({ users: {}, logs: {} }));
-  console.log('📜 NEW VAULT CREATED!');
-}
-
-// 📖 READ THE VAULT (get all the data)
-// this is like opening the treasure chest and seeing what's inside
-const getVault = () => JSON.parse(fs.readFileSync(DB_PATH));
-
-// 💾 SAVE THE VAULT (write the data back)
-// after we make changes, we gotta save them or it's like it never happened!
-const saveVault = (data) => fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+// This lets us keep track of Butter Points with atomic transactions!
+// Firebase handles concurrent updates automatically - no race conditions!
 
 // ==========================================
 // APP INITIALIZATION (LET'S GOOOO)
@@ -134,11 +119,11 @@ app.command('/bribe-squire', async ({ command, ack, client }) => {
   // All the funny things the squire can say
   const squireSayings = [
     'A bribe? I mean... a "generous donation to the yeast fund"!',
-    'I didn\'t see anything, and for that price, neither did you!',
-    'I\'ve forgotten all the King\'s rules!',
-    'The King\'s crown is just a fancy way to hide a receding hairline.',
+    "I didn't see anything, and for that price, neither did you!",
+    "I've forgotten all the King's rules!",
+    "The King's crown is just a fancy way to hide a receding hairline.",
     'The royal scepter? He uses it to reach the itchy spot on his back. Truly majestic.',
-    'Ooh, shiny! Almost as shiny as the King\'s forehead when he is trying to do basic math.',
+    "Ooh, shiny! Almost as shiny as the King's forehead when he is trying to do basic math.",
     'A bribe! Did you know the King wears a corset under that "breastplate"?',
     'For a small fee, I can make the royal taxes "disappear".',
     'You dare offer me a bribe? I will pretend I did not see this... for a price.',
@@ -148,7 +133,7 @@ app.command('/bribe-squire', async ({ command, ack, client }) => {
     "I'll take the coin, but you're still dressed like a turnip farmer.",
     "A bribe from *you*? I've seen more gold in a dragon's dental records.",
     "Money can buy my silence, but it clearly can't buy you a sense of style.",
-    "Thanks for the tip!",
+    'Thanks for the tip!',
     "I'd help you overthrow the King, but I'm afraid you'd mess up the paperwork.",
     "I'll take the gold, but no amount of coin can fix the fact that your family tree is a shrub.",
     "This bribe is almost as disappointing as your father/'s face when you were born.",
@@ -156,10 +141,10 @@ app.command('/bribe-squire', async ({ command, ack, client }) => {
     "It's a good thing you're paying me to listen, because your conversation is about as stimulating as watching bread mold.",
     "I'll keep your secret, but mostly because I don't want people to know I associate with someone who wears... *that* outfit.",
     "You call this a bribe? This wouldn't even buy a stale bagel. GUARDS!",
-    "My loyalty to the King is absolute! ...Unless you have another bag of gold in that pocket?",
+    'My loyalty to the King is absolute! ...Unless you have another bag of gold in that pocket?',
     "Yeasty the Squire is a man of honor! (Check back in five minutes when I'm hungrier).",
-    "I shall tell the King of this offense... unless you double the offer immediately!",
-    "The King may be a buffoon, but he pays better than you. Try harder, peasant!",
+    'I shall tell the King of this offense... unless you double the offer immediately!',
+    'The King may be a buffoon, but he pays better than you. Try harder, peasant!',
   ];
 
   // Pick a random saying
@@ -175,8 +160,8 @@ app.command('/bribe-squire', async ({ command, ack, client }) => {
 // 🧈 /butter-up [@user] - Give someone 1 Butter Point!
 // THIS IS THE MAIN COMMAND!!! Features:
 //   - Can't butter yourself (duh, no cheating)
-//   - Max 3 butters per day per person (rate limiting so ppl don't spam)
-//   - Keeps track of everything in royal_vault.json
+//   - Max 3 butters per day per person (rate limiting using Firebase)
+//   - Atomic transactions ensure safe concurrent updates
 // Usage: /butter-up @username
 app.command('/butter-up', async ({ command, ack, client }) => {
   await ack(); // Tell Slack we got this
@@ -207,24 +192,9 @@ app.command('/butter-up', async ({ command, ack, client }) => {
     });
   }
 
-  // 🗂️ GET THE VAULT DATA (all the points and logs)
-  const vault = getVault();
-
-  // 📅 GET TODAY'S DATE in YYYY-MM-DD format for rate limiting
-  const today = new Date().toISOString().split('T')[0];
-
-  // 📊 RATE LIMITING: Check if user has exceeded 3 butters per day
-  // Initialize the log for this user if they don't have one yet
-  vault.logs[giver] = vault.logs[giver] || { date: today, count: 0 };
-
-  // 🔄 RESET THE COUNTER if it's a new day
-  // This way everyone gets 3 fresh butters each day
-  if (vault.logs[giver].date !== today) {
-    vault.logs[giver] = { date: today, count: 0 };
-  }
-
-  // ❌ CHECK if they already used all 3 butters today
-  if (vault.logs[giver].count >= 3) {
+  // 📊 RATE LIMITING: Check if user has exceeded 3 butters per day (Firebase)
+  const canAward = await checkButterLimit(giver);
+  if (!canAward) {
     return await client.chat.postEphemeral({
       channel: command.channel_id,
       user: giver,
@@ -232,24 +202,24 @@ app.command('/butter-up', async ({ command, ack, client }) => {
     });
   }
 
-  // ✨ GIVE THE POINT AND UPDATE THE LOGS ✨
-  // Create a new user entry if they don't exist yet
-  vault.users[receiver] = vault.users[receiver] || { points: 0, title: 'Flour Peasant' };
+  // ✨ FIREBASE TRANSACTION: Award butter point safely
+  // Atomic transactions ensure data integrity even with concurrent updates!
+  const newPoints = await awardButterPoint(receiver);
 
-  // ADD 1 BUTTER POINT
-  vault.users[receiver].points += 1;
-
-  // INCREMENT the count for rate limiting
-  vault.logs[giver].count += 1;
-
-  // 💾 SAVE EVERYTHING BACK TO THE FILE!!!
-  saveVault(vault);
-
-  // 📣 POST A SUCCESS MESSAGE TO THE CHANNEL
-  await client.chat.postMessage({
-    channel: command.channel_id,
-    text: `🧈 <@${giver}> has buttered <@${receiver}>!\n*Total Influence:* ${vault.users[receiver].points} Butter Point${vault.users[receiver].points !== 1 ? 's' : ''}`,
-  });
+  if (newPoints !== null) {
+    // 📣 POST A SUCCESS MESSAGE TO THE CHANNEL
+    await client.chat.postMessage({
+      channel: command.channel_id,
+      text: `🧈 <@${giver}> has buttered <@${receiver}>!\n*Total Influence:* ${newPoints} Butter Point${newPoints !== 1 ? 's' : ''}`,
+    });
+  } else {
+    // ❌ ERROR
+    await client.chat.postEphemeral({
+      channel: command.channel_id,
+      user: giver,
+      text: 'Something went wrong! Try again later.',
+    });
+  }
 });
 
 // 👑 /promote [@user] [title] - KING ONLY - Give someone a custom title
@@ -286,23 +256,23 @@ app.command('/promote', async ({ command, ack, client }) => {
     });
   }
 
-  // 🏆 UPDATE THE VAULT WITH THE NEW TITLE
-  const vault = getVault();
+  // 🏆 UPDATE USER TITLE IN FIREBASE
+  const success = await promoteUser(target, newTitle);
 
-  // Create a new user entry if they don't exist yet
-  vault.users[target] = vault.users[target] || { points: 0 };
-
-  // SET THEIR NEW TITLE
-  vault.users[target].title = newTitle;
-
-  // 💾 SAVE IT!!!
-  saveVault(vault);
-
-  // 📣 ANNOUNCE THE PROMOTION TO THE CHANNEL
-  await client.chat.postMessage({
-    channel: command.channel_id,
-    text: `*BY ROYAL DECREE:* <@${target}> is hereby known as the **${newTitle}**!`,
-  });
+  if (success) {
+    // 📣 ANNOUNCE THE PROMOTION TO THE CHANNEL
+    await client.chat.postMessage({
+      channel: command.channel_id,
+      text: `*BY ROYAL DECREE:* <@${target}> is hereby known as the **${newTitle}**!`,
+    });
+  } else {
+    // ❌ ERROR
+    await client.chat.postEphemeral({
+      channel: command.channel_id,
+      user: command.user_id,
+      text: 'Something went wrong! Try again later.',
+    });
+  }
 });
 
 // 👑 /court-rankings - SHOW THE LEADERBOARD!!!
@@ -312,21 +282,16 @@ app.command('/promote', async ({ command, ack, client }) => {
 app.command('/court-rankings', async ({ ack, client, command }) => {
   await ack(); // Acknowledge we got the command
 
-  // 🗂️ GET ALL THE DATA FROM THE VAULT
-  const vault = getVault();
-
-  // 🏆 SORT EVERYONE BY BUTTER POINTS (highest first!)
-  // Object.entries turns the object into an array of [userId, stats] pairs
-  const sorted = Object.entries(vault.users).sort(([, a], [, b]) => b.points - a.points); // Sort descending (biggest numbers first)
+  // 🏆 GET LEADERBOARD FROM FIREBASE (automatically sorted!)
+  const leaderboard = await getLeaderboard();
 
   // 📝 BUILD THE LEADERBOARD TEXT
-  // Map over the sorted array and create a nice formatted line for each person
   const leaderboardText =
-    sorted.length > 0
-      ? sorted
-          .map(([id, stats], i) => {
+    leaderboard.length > 0
+      ? leaderboard
+          .map((user, i) => {
             // i starts at 0, so i+1 gives us 1, 2, 3, etc. for the ranking
-            return `*${i + 1}.* <@${id}> — ${stats.points} Butter Point${stats.points !== 1 ? 's' : ''} | _${stats.title || 'Flour Peasant'}_`;
+            return `*${i + 1}.* <@${user.userId}> — ${user.points} Butter Point${user.points !== 1 ? 's' : ''} | _${user.title}_`;
           })
           .join('\n') // Join all the lines with newlines
       : 'The court is currently empty. No nobles have earned Butter Points yet.'; // Message if no one has any points yet
@@ -339,7 +304,7 @@ app.command('/court-rankings', async ({ ack, client, command }) => {
         type: 'header', // Big bold header
         text: {
           type: 'plain_text',
-          text: 'The Royal Leaderboard',
+          text: '👑 The Royal Leaderboard',
           emoji: true,
         },
       },
