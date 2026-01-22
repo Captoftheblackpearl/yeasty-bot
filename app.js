@@ -104,73 +104,77 @@ app.command('/bribe-squire', async ({ command, ack, client }) => {
   });
 });
 
-// /butter-up [@user] - Award 1 Butter Point
+// /butter-up - Trigger Modal for reliable UID collection
 app.command('/butter-up', async ({ command, ack, client }) => {
   await ack();
 
-  const giver = command.user_id;
-
-  // SQUIRE DIAGNOSTICS
-  console.log('--- SQUIRE DIAGNOSTICS ---');
-  console.log('RAW TEXT RECEIVED:', JSON.stringify(command.text));
-  
-  /**
-   * ROBUST ID EXTRACTION
-   * This handles standard mentions <@U12345>, 
-   * mentions with pipes <@U12345|name>, 
-   * and escaped characters &lt;@U12345&gt;
-   */
-  const match = command.text.match(/(?:<@|&lt;@|@)(?<id>[A-Z0-9]+)(?:\||&gt;|>)?/);
-  const receiver = match?.groups?.id;
-
-  console.log('EXTRACTED RECEIVER ID:', receiver);
-  console.log('---------------------------');
-
-  // 1. Error Check: No receiver found
-  if (!receiver) {
-    return await client.chat.postEphemeral({
-      channel: command.channel_id,
-      user: giver,
-      text: `Squire Error: I saw "${command.text}" but could not find a User ID. Please select the user from the Slack menu so their name is properly highlighted.`
-    });
-  }
-
-  // 2. Error Check: Self-buttering
-  if (giver === receiver) {
-    return await client.chat.postEphemeral({
-      channel: command.channel_id,
-      user: giver,
-      text: 'Shields up! You cannot butter yourself. Find a worthy noble to butter instead.'
-    });
-  }
-
   try {
-    // 3. Check Daily Limit (3 per day)
-    const canAward = await checkButterLimit(giver);
+    // Check limit first to save them the effort of filling the modal
+    const canAward = await checkButterLimit(command.user_id);
     if (!canAward) {
       return await client.chat.postEphemeral({
         channel: command.channel_id,
-        user: giver,
+        user: command.user_id,
         text: "You have used all 3 daily butter rations. Try again tomorrow."
       });
     }
 
-    // 4. Award the Point in Firebase
-    const newPoints = await awardButterPoint(receiver);
+    // Open Modal
+    await client.views.open({
+      trigger_id: command.trigger_id,
+      view: {
+        type: "modal",
+        callback_id: "butter_up_modal",
+        private_metadata: command.channel_id, // Store channel ID to post message later
+        title: { type: "plain_text", text: "Butter Up a Noble" },
+        submit: { type: "plain_text", text: "Butter Them Up" },
+        close: { type: "plain_text", text: "Cancel" },
+        blocks: [
+          {
+            type: "input",
+            block_id: "user_block",
+            label: { type: "plain_text", text: "Which noble deserves butter?" },
+            element: {
+              type: "users_select",
+              action_id: "selected_user",
+              placeholder: { type: "plain_text", text: "Select a user" }
+            }
+          }
+        ]
+      }
+    });
+  } catch (error) {
+    console.error(error);
+  }
+});
 
+// Handle Modal Submission
+app.view("butter_up_modal", async ({ ack, body, view, client }) => {
+  await ack();
+
+  const giver = body.user.id;
+  const receiver = view.state.values.user_block.selected_user.selected_user;
+  const channelId = view.private_metadata;
+
+  // Note: Self-buttering check remains as it's a logical rule, 
+  if (giver === receiver) {
+    return await client.chat.postEphemeral({
+      channel: channelId,
+      user: giver,
+      text: "You cannot butter yourself, noble. Find someone else to praise!"
+    });
+  }
+
+  try {
+    const newPoints = await awardButterPoint(receiver);
     if (newPoints !== null) {
       await client.chat.postMessage({
-        channel: command.channel_id,
+        channel: channelId,
         text: `<@${giver}> has buttered <@${receiver}>!\n*Total Influence:* ${newPoints} Butter Point${newPoints !== 1 ? 's' : ''}`
       });
     }
   } catch (error) {
     console.error('Butter error:', error);
-    await client.chat.postEphemeral({
-      channel: command.channel_id,
-      user: giver,
-      text: 'The butter churn is jammed. Please contact the royal architect.'
-    });
   }
 });
 
@@ -186,8 +190,8 @@ app.command('/promote', async ({ command, ack, client }) => {
     });
   }
 
-  const targetMatch = command.text.match(/(?:<@|&lt;@|@)(?<id>[A-Z0-9]+)/);
-  const target = targetMatch?.groups?.id;
+  const targetMatch = command.text.match(/[UW][A-Z0-9]{8,12}/);
+  const target = targetMatch ? targetMatch[0] : null;
   const newTitle = command.text.replace(/<.*?>/, '').trim();
 
   if (!target || !newTitle) {
