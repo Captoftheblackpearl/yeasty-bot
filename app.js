@@ -163,32 +163,30 @@ app.command('/bribe-squire', async ({ command, ack, client }) => {
 //   - Max 3 butters per day per person (rate limiting using Firebase)
 //   - Atomic transactions ensure safe concurrent updates
 // Usage: /butter-up @username
-app.command('/butter-up', async ({ command, ack, client }) => {
-  await ack(); // Tell Slack we got this
+aapp.command('/butter-up', async ({ command, ack, client }) => {
+  await ack(); // Acknowledge immediately (Squire is fast!)
 
-  // WHO IS GIVING THE BUTTER (the person who ran the command)
   const giver = command.user_id;
 
-  // PARSE THE COMMAND TO FIND WHO THEY'RE BUTTERING
-  // <@U12345> is how Slack formats mentions, so we extract the user ID
-  const receiverMatch = command.text.match(/<@([A-Z0-9]+)>/);
+  // 🔍 1. Refined Regex: Slack mentions look like <@U12345678|name> or just <@U12345678>
+  const receiverMatch = command.text.match(/<@([A-Z0-9]+)(?:\|[^>]*)?>/);
   const receiver = receiverMatch ? receiverMatch[1] : null;
 
-  // ❌ ERROR CHECK: Make sure they actually mentioned someone
+  // ❌ Check if they actually mentioned a noble
   if (!receiver) {
     return await client.chat.postEphemeral({
       channel: command.channel_id,
       user: giver,
-      text: '🛈 Usage: `/butter-up @username` to award 1 Butter Point',
+      text: '🛈 Usage: `/butter-up @username` to award 1 Butter Point'
     });
   }
 
-  // ❌ ABUSE PROTECTION: Can't butter yourself lmaooo
+  // ❌ Prevent self-buttering
   if (giver === receiver) {
     return await client.chat.postEphemeral({
       channel: command.channel_id,
       user: giver,
-      text: 'You cannot butter yourself! Find a worthy noble to butter instead.',
+      text: '🛡️ You cannot butter yourself! That is not the way of the Squire.'
     });
   }
 
