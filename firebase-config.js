@@ -1,31 +1,24 @@
 // 🔥 FIREBASE ADMIN CONFIGURATION
-// This file initializes Firebase Admin SDK for the Bread Bot
-// Using Admin SDK allows us to run on a server with full database access!
-
 import admin from 'firebase-admin';
 
-// ⚠️ IMPORTANT!!!
-// Set your Firebase credentials using one of these methods:
-// 1. GOOGLE_APPLICATION_CREDENTIALS environment variable (best for production)
-// 2. Place service account JSON in project root
-// 3. Use firebase-admin emulator for local development
-
-// 🛡️ INITIALIZE FIREBASE ADMIN
-// Check if already initialized (prevents duplicate app errors)
 if (!admin.apps.length) {
   try {
+    // 1. Grab the JSON string from Render's Environment Variables
+    // 2. Parse it back into a JavaScript Object
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
     admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
+      // Use .cert() instead of .applicationDefault()
+      credential: admin.credential.cert(serviceAccount),
       databaseURL: process.env.FIREBASE_DATABASE_URL,
     });
-    console.log('✨ Firebase Admin initialized successfully!');
+    
+    console.log('✨ Firebase Admin initialized with Service Account!');
   } catch (error) {
     console.error('❌ Firebase Admin initialization error:', error);
+    console.log('Check if FIREBASE_SERVICE_ACCOUNT is correctly set in Render.');
   }
 }
 
-// 📋 GET DATABASE REFERENCE
 const db = admin.database();
-
-// 📚 EXPORT FOR USE IN OTHER FILES
 export { admin, db };
