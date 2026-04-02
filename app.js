@@ -271,7 +271,7 @@ app.command('/court-rankings', async ({ ack, client, command }) => {
     leaderboard.length > 0
       ? leaderboard
           .map((user, i) => {
-            return `*${i + 1}.* <@${user.userId}> — ${user.points} Butter Point${user.points !== 1 ? 's' : ''} | _${user.title || 'Noble'}_`;
+            return `*${i + 1}.* <${user.userId}> — ${user.points} Butter Point${user.points !== 1 ? 's' : ''} | _${user.title || 'Noble'}_`;
           })
           .join('\n')
       : 'The court is currently empty. No nobles have earned Butter Points yet.';
@@ -307,7 +307,7 @@ app.event('member_joined_channel', async ({ event, client }) => {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `Welcome to the Royal Court, <@${event.user}>!\n\nDelighted to have you join our noble ranks.`,
+          text: `Welcome to the Royal Court, <@${event.user}>!\n\nDelighted to have you join our noble ranks. Feel free to leave if you were kidnaped. `,
         },
       },
     ],
